@@ -1,0 +1,30 @@
+{
+  "_comment": "Edit this file when conversion factors change. 'factors' = pieces per kg, from the machine-line conversion round-off chart. 'rules' map a Work centre (regex, case-insensitive, first match wins) to the ENV and TAG factor names. Use null when that machine line has no ENV / TAG factor.",
+  "uplift_percent": 105,
+  "factors": {
+    "Constanta Envelope": 1525,
+    "MD-20 Crimp Envelope": 1700,
+    "MD HS Envelope Paper": 1425,
+    "MD HS Envelope Foil": 1190,
+    "Perfecta Envelope (PENV)": 1520,
+    "Maisa Envelope": 1410,
+    "CONSTANTA-250": 1740,
+    "CONSTANTA FAMILY SIZE": 6320,
+    "Constanta Tag Big": 6040,
+    "MD-20 Tag": 12600,
+    "Maisa Tag": 9080,
+    "PERFECTA TAG & PK-45 & Constanta Tag": 10780
+  },
+  "rules": [
+    {"pattern": "^C\\s*-?\\s*250",            "env": "CONSTANTA-250",            "tag": "PERFECTA TAG & PK-45 & Constanta Tag", "note": "C250, C250-A, C250 AF"},
+    {"pattern": "^CONSTANTA.*FAMILY",         "env": "CONSTANTA FAMILY SIZE",    "tag": "PERFECTA TAG & PK-45 & Constanta Tag"},
+    {"pattern": "^CONSTANTA.*TAG.*BIG",       "env": null,                       "tag": "Constanta Tag Big"},
+    {"pattern": "^CONSTANTA",                 "env": "Constanta Envelope",       "tag": "PERFECTA TAG & PK-45 & Constanta Tag", "note": "CONSTANTA ENV, ENV BT, BT 25, F, G, H, HF, M ..."},
+    {"pattern": "^MD\\s*-?\\s*HS.*FOIL",      "env": "MD HS Envelope Foil",      "tag": null},
+    {"pattern": "^MD\\s*-?\\s*HS.*PAPER",     "env": "MD HS Envelope Paper",     "tag": null},
+    {"pattern": "^MD\\s*-?\\s*20",            "env": "MD-20 Crimp Envelope",     "tag": "MD-20 Tag", "note": "MD20 ENV, MD20 ENV GARANT, MD20 4GM TAG"},
+    {"pattern": "^(PERFECTA|PENV)",           "env": "Perfecta Envelope (PENV)", "tag": "PERFECTA TAG & PK-45 & Constanta Tag"},
+    {"pattern": "^PK\\s*-?\\s*45",            "env": null,                       "tag": "PERFECTA TAG & PK-45 & Constanta Tag"},
+    {"pattern": "^MAISA",                     "env": "Maisa Envelope",           "tag": "Maisa Tag"}
+  ]
+}
