@@ -83,15 +83,18 @@ def test_invalid_file():
 
 def test_output_workbook_structure():
     res = P.process(make_xlsx([row("C250", 1000, 2000), row("PERFECTA ENV", 500)]))
-    ws = load_workbook(io.BytesIO(P.build_workbook(res, "23-11-2026"))).active
+    ws = load_workbook(io.BytesIO(P.build_workbook(res, "23-11-2026", "23-11-2026"))).active
     assert ws.title == "23-11-2026"
-    assert [c.value for c in ws[1]] == P.OUTPUT_HEADERS
-    assert ws["H2"].value == "=(F2/1740)*105%"
-    assert ws["I2"].value == "=(G2/10780)*105%"
-    assert ws["I3"].value is None
-    for r in (2, 3):
-        assert all(ws.cell(r, c).value is None for c in range(10, 14))
-    assert ws["D4"].value == "TOTAL" and ws["H4"].value == "=SUM(H2:H3)" and ws["J4"].value == "=H4+I4"
+    assert ws["A1"].value == "MANUAL REQUEST REGISTER - 23-11-2026"
+    assert "A1:L1" in {str(m) for m in ws.merged_cells.ranges}
+    assert [c.value for c in ws[2]] == P.OUTPUT_HEADERS and "Day" not in P.OUTPUT_HEADERS
+    assert ws["A3"].value == "C250"
+    assert ws["G3"].value == "=(E3/1740)*105%"
+    assert ws["H3"].value == "=(F3/10780)*105%"
+    assert ws["H4"].value is None
+    for r in (3, 4):
+        assert all(ws.cell(r, c).value is None for c in range(9, 13))
+    assert ws["C5"].value == "TOTAL" and ws["G5"].value == "=SUM(G3:G4)" and ws["I5"].value == "=G5+H5"
 
 
 SAMPLE = Path(__file__).resolve().parents[2] / "Manual Request Register Oct26.xlsx"

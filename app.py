@@ -131,7 +131,7 @@ if st.button("3. Generate Report", type="primary"):
         st.session_state["report"] = {
             "key": (digest, sheet),
             "result": result,
-            "xlsx": P.build_workbook(result, sheet_title=title),
+            "xlsx": P.build_workbook(result, sheet_title=title, report_date=title),
             "filename": f"Manual Request Register {title}.xlsx",
         }
     except P.InputError as exc:
@@ -172,7 +172,6 @@ else:
 preview = pd.DataFrame(
     [
         {
-            "Day": r.day,
             "Work centre": r.work_centre,
             "Item": r.item,
             "Day Plan Qty CFC": r.day_plan_qty,
@@ -188,7 +187,7 @@ preview = pd.DataFrame(
     ]
 )
 st.subheader("Preview")
-st.caption("Factors are shown here for checking only; the Excel file has exactly the 13 report columns.")
+st.caption("Factors are shown here for checking only; the Excel file has exactly the 12 report columns.")
 st.dataframe(preview, hide_index=True, use_container_width=True)
 
 st.download_button(

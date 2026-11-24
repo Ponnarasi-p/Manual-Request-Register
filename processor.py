@@ -20,7 +20,6 @@ CONFIG_PATH = Path(__file__).with_name("conversion_factors.json")
 
 # Input columns we keep, in output order, with the header spellings we accept.
 REQUIRED_COLUMNS: list[tuple[str, tuple[str, ...]]] = [
-    ("Day", ("day",)),
     ("Work centre", ("work centre", "work center", "workcentre", "workcenter", "work centre name")),
     ("Item", ("item", "item description", "item name")),
     ("Day Plan Qty", ("day plan qty", "day plan qty cfc", "day plan quantity", "day plan qty (cfc)")),
@@ -30,7 +29,6 @@ REQUIRED_COLUMNS: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 OUTPUT_HEADERS = [
-    "Day",
     "Work centre",
     "Item",
     "Day Plan Qty CFC",
@@ -46,7 +44,8 @@ OUTPUT_HEADERS = [
 ]
 
 # Widths based on the 23-11-2026 reference sheet, widened slightly for the longer headings.
-COLUMN_WIDTHS = [10, 20, 46, 10, 14, 11, 11, 9, 9, 10, 10, 10, 10]
+COLUMN_WIDTHS = [20, 46, 10, 14, 11, 11, 9, 9, 10, 10, 10, 10]
+TITLE_PREFIX = "MANUAL REQUEST REGISTER"
 
 HEADER_SCAN_ROWS = 15
 
@@ -66,7 +65,6 @@ class Issue:
 @dataclass
 class ReportRow:
     source_row: int
-    day: Any
     work_centre: Any
     item: Any
     day_plan_qty: Any
@@ -253,7 +251,6 @@ def process(data: bytes, config: dict | None = None, sheet_name: str | None = No
 
         row = ReportRow(
             source_row=r,
-            day=_clean_text(raw["Day"]) or None,
             work_centre=_clean_text(raw["Work centre"]) or None,
             item=_clean_text(raw["Item"]) or None,
             day_plan_qty=None,
@@ -339,10 +336,12 @@ def _fmt_uplift(uplift: float) -> str:
     return f"{int(round(pct))}%" if abs(pct - round(pct)) < 1e-9 else f"{pct}%"
 
 
-def build_workbook(result: Result, sheet_title: str | None = None) -> bytes:
+def build_workbook(result: Result, sheet_title: str | None = None, report_date: str | None = None) -> bytes:
+    """Row 1: dated title. Row 2: column headings. Then the data rows and the TOTAL row."""
     wb = Workbook()
     ws = wb.active
     ws.title = _safe_sheet_title(sheet_title or result.sheet_name)
+    ncols = len(OUTPUT_HEADERS)
 
     base = Font(name="Calibri", size=9)
     kg_font = Font(name="Calibri", size=10)
@@ -350,80 +349,94 @@ def build_workbook(result: Result, sheet_title: str | None = None) -> bytes:
     center = Alignment(horizontal="center", vertical="center")
     left = Alignment(horizontal="left", vertical="center")
 
-    for c, title in enumerate(OUTPUT_HEADERS, start=1):
-        cell = ws.cell(1, c, title)
+    date_text = report_date or sheet_title or result.sheet_name.strip()
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ncols)
+    title_cell = ws.cell(1, 1, f"{TITLE_PREFIX} - {date_text}" if date_text else TITLE_PREFIX)
+    title_cell.font = Font(name="Calibri", size=14, bold=True)
+    title_cell.alignment = center
+    for c in range(1, ncols + 1):
+        ws.cell(1, c).border = BORDER
+    ws.row_dimensions[1].height = 26
+
+    hdr = 2
+    for c, heading in enumerate(OUTPUT_HEADERS, start=1):
+        cell = ws.cell(hdr, c, heading)
         cell.font = header_font
         cell.fill = HEADER_FILL
         cell.border = BORDER
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    ws.row_dimensions[1].height = 30
+    ws.row_dimensions[hdr].height = 30
+
+    # 1-based column positions in the output
+    C_QTY, C_ENV, C_TAG, C_ENV_KG, C_TAG_KG, C_ISSUED = 3, 5, 6, 7, 8, 9
+    L_ENV, L_TAG, L_ENV_KG, L_TAG_KG = (get_column_letter(c) for c in (C_ENV, C_TAG, C_ENV_KG, C_TAG_KG))
 
     uplift_txt = _fmt_uplift(result.uplift)
-    first = 2
+    first = hdr + 1
     for i, row in enumerate(result.rows):
         r = first + i
-        values = [row.day, row.work_centre, row.item, row.day_plan_qty, row.contractor, row.env, row.tag]
+        values = [row.work_centre, row.item, row.day_plan_qty, row.contractor, row.env, row.tag]
         for c, v in enumerate(values, start=1):
             ws.cell(r, c, v)
 
-        for kind, qty_col, kg_col in (("env", "F", 8), ("tag", "G", 9)):
+        for kind, qty_col, qty_letter, kg_col in (("env", C_ENV, L_ENV, C_ENV_KG), ("tag", C_TAG, L_TAG, C_TAG_KG)):
             qty = getattr(row, kind)
             factor = getattr(row, f"{kind}_factor")
             flag = getattr(row, f"{kind}_flag")
             cell = ws.cell(r, kg_col)
             if factor is not None and isinstance(qty, (int, float)):
-                cell.value = f"=({qty_col}{r}/{_fmt_factor(factor)})*{uplift_txt}"
+                cell.value = f"=({qty_letter}{r}/{_fmt_factor(factor)})*{uplift_txt}"
             elif flag:
                 cell.fill = FLAG_FILL
                 cell.comment = Comment(flag + ". Please check the conversion factor.", "Report Generator")
                 if not isinstance(qty, (int, float)) and qty not in (None, ""):
-                    ws.cell(r, 6 if kind == "env" else 7).fill = FLAG_FILL
+                    ws.cell(r, qty_col).fill = FLAG_FILL
 
-        # Columns J:M (issued quantities) are deliberately left empty.
-        for c in range(1, len(OUTPUT_HEADERS) + 1):
+        # Issued quantity columns (I:L) are deliberately left empty.
+        for c in range(1, ncols + 1):
             cell = ws.cell(r, c)
             cell.border = BORDER
-            cell.font = kg_font if c in (8, 9) else base
-            if c in (2, 3):
+            cell.font = kg_font if c in (C_ENV_KG, C_TAG_KG) else base
+            if c in (1, 2):
                 cell.alignment = left
-            elif c in (8, 9) or c >= 10:
+            elif c >= C_ENV_KG:
                 cell.alignment = Alignment(vertical="center")
             else:
                 cell.alignment = center
-        ws.cell(r, 4).number_format = QTY_FORMAT
-        ws.cell(r, 6).number_format = PCS_FORMAT
-        ws.cell(r, 7).number_format = PCS_FORMAT
-        ws.cell(r, 8).number_format = KG_FORMAT
-        ws.cell(r, 9).number_format = KG_FORMAT
+        ws.cell(r, C_QTY).number_format = QTY_FORMAT
+        ws.cell(r, C_ENV).number_format = PCS_FORMAT
+        ws.cell(r, C_TAG).number_format = PCS_FORMAT
+        ws.cell(r, C_ENV_KG).number_format = KG_FORMAT
+        ws.cell(r, C_TAG_KG).number_format = KG_FORMAT
         ws.row_dimensions[r].height = 22
 
     last = first + len(result.rows) - 1
     total = last + 1
     bold = Font(name="Calibri", size=11, bold=True)
-    ws.merge_cells(start_row=total, start_column=4, end_row=total, end_column=7)
-    ws.cell(total, 4, "TOTAL").font = bold
-    ws.cell(total, 4).alignment = center
-    ws.cell(total, 8, f"=SUM(H{first}:H{last})")
-    ws.cell(total, 9, f"=SUM(I{first}:I{last})")
-    ws.merge_cells(start_row=total, start_column=10, end_row=total, end_column=13)
-    ws.cell(total, 10, f"=H{total}+I{total}")
-    for c in range(4, 14):
+    ws.merge_cells(start_row=total, start_column=C_QTY, end_row=total, end_column=C_TAG)
+    ws.cell(total, C_QTY, "TOTAL").font = bold
+    ws.cell(total, C_QTY).alignment = center
+    ws.cell(total, C_ENV_KG, f"=SUM({L_ENV_KG}{first}:{L_ENV_KG}{last})")
+    ws.cell(total, C_TAG_KG, f"=SUM({L_TAG_KG}{first}:{L_TAG_KG}{last})")
+    ws.merge_cells(start_row=total, start_column=C_ISSUED, end_row=total, end_column=ncols)
+    ws.cell(total, C_ISSUED, f"={L_ENV_KG}{total}+{L_TAG_KG}{total}")
+    for c in range(C_QTY, ncols + 1):
         cell = ws.cell(total, c)
         cell.border = BORDER
-        if c >= 8:
+        if c >= C_ENV_KG:
             cell.font = bold
             cell.number_format = KG_FORMAT
-    ws.cell(total, 10).alignment = center
+    ws.cell(total, C_ISSUED).alignment = center
     ws.row_dimensions[total].height = 22
 
     for c, width in enumerate(COLUMN_WIDTHS, start=1):
         ws.column_dimensions[get_column_letter(c)].width = width
-    ws.freeze_panes = "A2"
+    ws.freeze_panes = ws.cell(first, 1).coordinate
     ws.page_setup.orientation = "landscape"
     ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 0
     ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.print_title_rows = "1:1"
+    ws.print_title_rows = f"1:{hdr}"
 
     buf = io.BytesIO()
     wb.save(buf)

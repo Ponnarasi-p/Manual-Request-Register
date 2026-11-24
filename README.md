@@ -5,13 +5,14 @@ formatted daily issue sheet: **Upload Excel → Generate Report → Download Exc
 
 ## What it does
 1. Reads the uploaded `.xlsx` and finds the sheet/header row with the mandatory columns
-   (Day, Work centre, Item, Day Plan Qty, Contractor, ENV, TAG). CTN, BLEND, PROMO, etc. are dropped.
+   (Work centre, Item, Day Plan Qty, Contractor, ENV, TAG). Day, CTN, BLEND, PROMO, etc. are dropped.
+   The output starts with a title row "MANUAL REQUEST REGISTER - dd-mm-yyyy" using the report date chosen in the app.
 2. Cleans quantities written as text (e.g. `  6,00,000`) into numbers.
 3. Picks the ENV and TAG conversion factor for each row from its Work centre
    (`conversion_factors.json`) and writes `ENV in Kgs = (ENV / factor) × 105%`,
    `TAG in Kgs = (TAG / factor) × 105%` as Excel formulas.
 4. Adds the four blank columns: Issued Env in Pcs, Issued Env in kgs, Issued Tag in Pcs, Issued Tag in kgs.
-5. Adds the TOTAL row (sum of ENV kg, sum of TAG kg, and the combined total across J:M), as in the reference sheet.
+5. Adds the TOTAL row (sum of ENV kg, sum of TAG kg, and the combined total across I:L), as in the reference sheet.
 6. Produces exactly one `.xlsx` file to download.
 
 Rows whose Work centre isn't recognised, or whose quantity isn't a number, are kept, but the kg
